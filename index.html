@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CinéGrok Director - V6.0 Robustesse</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --panel-bg: #161b22;
+            --accent: #2e7d32;
+            --accent-light: #4caf50;
+            --border: #30363d;
+            --text-main: #e6edf3;
+            --text-dim: #8b949e;
+            --font-mono: 'SF Mono', monospace;
+            --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Statut */
+            --status-scripted: #2196f3;
+            --status-ok: #4caf50;
+            --status-generated: #ff9800;
+            --status-edited: #9c27b0;
+            --comp-color: #55acee;
+            --danger: #ff5555; /* Ajout pour les boutons de suppression */
+        }
+
+        * { box-sizing: border-box; outline: none; }
+
+        body {
+            margin: 0; padding: 0; background-color: var(--bg-dark);
+            color: var(--text-main); font-family: var(--font-ui);
+            height: 100vh; width: 100vw; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* HEADER & ACTIONS */
+        header {
+            height: 50px; background: var(--panel-bg); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 15px; justify-content: space-between;
+        }
+        .brand { font-weight: 700; font-size: 1.1rem; color: var(--accent-light); }
+        .actions button {
+            background: none; color: var(--text-dim); border: 1px solid var(--border);
+            padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+            transition: all 0.2s; margin-left: 8px;
+        }
+        .actions button:hover { background: var(--border); color: var(--text-main); }
+
+        /* MAIN LAYOUT */
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+
+        /* SIDEBAR - Minimaliste */
+        .sidebar {
+            width: 300px; background: var(--panel-bg); border-right: 1px solid var(--border);
+            padding: 15px; overflow-y: auto;
+        }
+        h2 { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; margin-top: 15px; margin-bottom: 8px; }
+        label { display: block; font-size: 0.75rem; margin-bottom: 3px; color: var(--text-dim); }
+        textarea, input:not([type="color"]):not([type="file"]):not([type="checkbox"]):not([type="range"]), select {
+            width: 100%; background: var(--bg-dark); border: 1px solid var(--border);
+            color: var(--text-main); border-radius: 4px; padding: 8px;
+            font-family: var(--font-mono); font-size: 0.8rem; resize: vertical; margin-bottom: 5px;
+        }
+
+        /* Accordéon */
+        .accordion-header { 
+            cursor: pointer; background: var(--border); color: var(--text-main); padding: 8px; 
+            border-radius: 4px; margin-top: 10px; font-size: 0.85rem; display: flex; 
+            justify-content: space-between; align-items: center;
+        }
+        .accordion-content { overflow: hidden; max-height: 0; transition: max-height 0.3s ease-out; padding-top: 5px;}
+        .accordion-content.open { max-height: 500px; }
+
+        /* TIMELINE CONTROLS */
+        .timeline-controls { padding: 0 15px; }
+
+        /* SCENE CARD - Épuration */
+        .timeline-container { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 15px 15px 50px 15px; 
+        }
+        .scene-list { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+        .scene-card {
+            background: var(--panel-bg); border: 1px solid var(--border);
+            border-left: 4px solid var(--border); padding: 10px; border-radius: 4px;
+            transition: border-color 0.2s;
+        }
+        .scene-card.dragging { opacity: 0.4; }
+        .scene-card:hover { border-color: var(--accent-light); }
+
+        .card-header { margin-bottom: 10px; align-items: center; display: flex; justify-content: space-between;}
+        .scene-number { background: none; color: var(--accent-light); padding: 0; font-size: 0.9rem; }
+        
+        /* Input Primaire Action/Camera */
+        .primary-input-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 8px; align-items: center; }
+        .primary-input-row input[type="text"] { margin-bottom: 0; }
+        .primary-input-row select { padding: 8px; font-size: 0.8rem; margin-bottom: 0; }
+        
+        /* Boutons de contrôle (Icônes) */
+        .btn-icon { background: none; border: none; color: var(--text-dim); padding: 5px; cursor: pointer; font-size: 0.9rem; }
+        .btn-icon:hover { color: var(--text-main); }
+        .btn-delete { color: var(--danger); }
+        .btn-delete:hover { color: var(--danger); background: none; }
+
+        /* Détails Avancés (Masqués par défaut) */
+        .advanced-details {
+            max-height: 0; overflow: hidden; transition: max-height 0.4s ease-in-out; 
+            padding-top: 5px; border-top: 1px dashed var(--border); margin-top: 10px;
+        }
+        .advanced-details.open { max-height: 400px; padding-bottom: 10px; }
+        .advanced-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 10px 0; }
+        .advanced-row > div { padding: 0; margin: 0; }
+
+        /* Bouton de bascule */
+        .toggle-btn { 
+            background: var(--border); color: var(--text-dim); border: none; padding: 5px 10px; 
+            border-radius: 4px; font-size: 0.7rem; cursor: pointer; transition: background 0.2s;
+        }
+        .toggle-btn:hover { background: var(--accent); color: var(--text-main); }
+        .scene-controls { display: flex; gap: 5px; align-items: center; }
+
+        /* Autres contrôles avancés simplifiés */
+        .mood-color-group { display: flex; align-items: center; gap: 5px; }
+        .mood-color-group label { margin: 0; color: var(--text-dim); }
+        .mood-color-group input[type="color"] { width: 20px; height: 20px; padding: 0; border: 1px solid var(--border); border-radius: 3px; }
+        .time-slider-group { gap: 5px; display: flex; align-items: center; }
+        .time-icon { font-size: 1rem; }
+        .time-slider-group input[type="range"] { height: 3px; flex-grow: 1; }
+        .prompt-weight-group { display: flex; align-items: center; gap: 5px; }
+        .prompt-weight-group input[type="number"] { width: 50px; padding: 5px; font-size: 0.7rem; }
+        
+        /* Composant de composition */
+        .comp-control { display: flex; align-items: center; }
+        .composition-grid { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+            width: 40px; height: 30px; border: 1px solid var(--comp-color); margin-left: 5px;
+            border-radius: 2px; cursor: pointer;
+        }
+        .comp-cell { background: var(--bg-dark); transition: background 0.1s; }
+        .comp-cell.active { background: var(--accent); }
+
+        /* Prompt Preview */
+        .final-prompt-preview {
+            background: var(--bg-dark); border: 1px solid var(--border); padding: 10px; font-size: 0.7rem;
+            margin-top: 10px; white-space: pre-wrap; word-break: break-all; cursor: pointer;
+        }
+        .word-count { float: right; color: var(--accent); font-weight: bold; }
+
+        /* Stats Bar & FAB */
+        .stats-bar { 
+            height: 30px; background: var(--panel-bg); border-top: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 20px; font-size: 0.8rem;
+            justify-content: space-between; position: fixed; bottom: 0; width: 100%;
+        }
+        .stat-item { color: var(--text-dim); }
+        #saveStatus { opacity: 0.5; transition: opacity 0.5s; }
+        .fab-add {
+            position: fixed; bottom: 20px; right: 20px; background: var(--accent-light);
+            color: var(--bg-dark); border: none; border-radius: 50%; width: 45px; height: 45px;
+            font-size: 20px; line-height: 45px; text-align: center; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            transition: transform 0.2s; z-index: 50;
+        }
+        .fab-add:hover { transform: scale(1.1); }
+        .toast {
+            position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%);
+            background-color: var(--accent); color: var(--bg-dark); padding: 10px 20px;
+            border-radius: 6px; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+            pointer-events: none; font-size: 0.9rem;
+        }
+        .toast.show { opacity: 1; }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); z-index: 100;
+            display: none; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: var(--panel-bg); padding: 30px; border-radius: 8px;
+            max-width: 900px; width: 90%; max-height: 90%; overflow-y: auto;
+            position: relative;
+        }
+        #batchPromptOutput {
+            background: var(--bg-dark); border: 1px solid var(--border);
+            padding: 15px; border-radius: 6px; font-family: var(--font-mono);
+            font-size: 0.8rem; white-space: pre-wrap; max-height: 500px; overflow-y: scroll;
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">CinéGrok <span style="font-size:0.5em; opacity:0.7">V6.0</span></div>
+        <div class="actions">
+            <button onclick="app.openBatchModal()">Séquencier</button>
+            <button onclick="app.importTrigger()">Importer</button>
+            <input type="file" id="fileInput" style="display:none;" accept=".json" onchange="app.importAll(event)">
+            <button onclick="app.exportAll()">Exporter</button>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div class="sidebar">
+            <h2>Master</h2>
+            <textarea id="masterPrompt" rows="5" oninput="app.saveToStorage(); app.renderPreviews();">Young rebellious rockstar with messy black hair, piercing blue eyes, wearing a vintage leather jacket and silver rings.</textarea>
+            
+            <div class="param-group">
+                <label>Ratio d'Aspect</label>
+                <select id="aspectRatio" onchange="app.saveToStorage(); app.renderPreviews()">
+                    <option value="16:9">16:9 (Cinéma/YouTube)</option>
+                    <option value="9:16">9:16 (Mobile/Reels)</option>
+                    <option value="4:3">4:3 (Vintage)</option>
+                    <option value="21:9">21:9 (Ultra-Cinéma)</option>
+                </select>
+            </div>
+
+            <div class="accordion-header" onclick="app.toggleAccordion('advancedGlobal')">
+                <span>Paramètres Avancés Globaux</span>
+                <span id="arrow-advancedGlobal">▼</span>
+            </div>
+            <div id="advancedGlobal" class="accordion-content">
+                <div class="param-group">
+                    <label>Style Visuel (Tech Style)</label>
+                    <textarea id="techStyle" rows="4" oninput="app.saveToStorage(); app.renderPreviews();">Cinematic music video, 8k resolution, photorealistic, dramatic lighting, slow motion, high contrast, Arri Alexa footage.</textarea>
+                </div>
+                
+                <div class="param-group">
+                    <label>Cohérence / Identité</label>
+                    <input type="text" id="consistencyTags" value="consistent face, identical character" oninput="app.saveToStorage(); app.renderPreviews();">
+                </div>
+
+                <div class="param-group">
+                    <label>🚫 Negative Prompt</label>
+                    <textarea id="negativePrompt" rows="3" oninput="app.saveToStorage(); app.renderPreviews();">low resolution, blurry, artifacts, noisy, duplicate characters, bad anatomy, deformed face.</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="timeline-container" id="timelineScroll">
+            <div class="timeline-controls">
+                <select id="statusFilter" onchange="app.filterScenes(this.value)">
+                    <option value="all">Filtre par Statut (Tout afficher)</option>
+                    <option value="Scripté">Scripté</option>
+                    <option value="Prompt OK">Prompt OK</option>
+                    <option value="Généré">Généré</option>
+                    <option value="Monté">Monté</option>
+                </select>
+            </div>
+
+            <div id="sceneList" class="scene-list">
+                </div>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item">SCÈNES: <span id="totalScenes" class="stat-value">0</span></div>
+        <div class="stat-item">DURÉE ESTIMÉE (6s/clip): <span id="totalTime" class="stat-value">00:00</span></div>
+        <div class="stat-item" id="saveStatus">Sauvegardé</div>
+    </div>
+
+    <button class="fab-add" onclick="app.addScene()">+</button>
+    
+    <div id="toast" class="toast"></div>
+
+    <div id="batchModal" class="modal">
+        <div class="modal-content">
+            <h3>Séquencier (Batch)</h3>
+            <p style="color:var(--text-dim); font-size:0.9rem;">Copiez la séquence complète de prompts pour la génération par lots.</p>
+            <div id="batchPromptOutput"></div>
+            <button class="actions button" onclick="app.copyBatchPrompts()">📋 Copier Tous les Prompts</button>
+            <button class="actions button" onclick="document.getElementById('batchModal').style.display = 'none'" style="background:var(--danger); border-color:var(--danger);">Fermer</button>
+        </div>
+    </div>
+
+    <script>
+        class ClipBuilder {
+            constructor() {
+                this.scenes = [];
+                this.dragSrcEl = null; 
+                this.currentFilter = 'all';
+                this.lastUsedStatus = 'Scripté'; 
+                this.lastUsedCamera = 'Slow zoom in';
+                this.accordionState = {};
+
+                this.availableCams = [
+                    "Statique", "Slow zoom in", "Zoom out", "Pan right", "Pan left", "Tracking shot", 
+                    "Handheld shake", "Low angle", "High angle", "Drone Orbit", "Dutch Angle", "Rack Focus", 
+                    "Extreme wide shot", "Reverse tracking"
+                ];
+                this.statusMap = {
+                    'Scripté': { color: 'var(--status-scripted)', label: '📝' },
+                    'Prompt OK': { color: 'var(--status-ok)', label: '✅' },
+                    'Généré': { color: 'var(--status-generated)', label: '📹' },
+                    'Monté': { color: 'var(--status-edited)', label: '✂️' }
+                };
+                this.timeMap = [
+                    { range: [1, 5], icon: '🌙', tag: 'Deep night, high-key city lights' },
+                    { range: [6, 7], icon: '🌅', tag: 'Blue hour, faint sunrise, cinematic mist' },
+                    { range: [8, 11], icon: '☀️', tag: 'Morning sun, crisp detail, strong shadows' },
+                    { range: [12, 14], icon: '🌞', tag: 'Midday sun, harsh lighting, high contrast' },
+                    { range: [15, 17], icon: '🌇', tag: 'Golden hour, long shadows, warm sunlight' },
+                    { range: [18, 20], icon: '🌆', tag: 'Dusk, deep shadows, neon glow' },
+                    { range: [21, 24], icon: '🌃', tag: 'Late night, moody streetlights, rain effects' }
+                ];
+                this.compMap = {
+                    'center': 'Symmetric composition, subject centered',
+                    'left': 'Rule of thirds composition, subject positioned left',
+                    'right': 'Rule of thirds composition, subject positioned right'
+                };
+
+                // DOM Elements
+                this.masterPromptInput = document.getElementById('masterPrompt');
+                this.techStyleInput = document.getElementById('techStyle');
+                this.consistencyInput = document.getElementById('consistencyTags');
+                this.negativePromptInput = document.getElementById('negativePrompt');
+                this.aspectRatioInput = document.getElementById('aspectRatio');
+                this.sceneListContainer = document.getElementById('sceneList');
+                this.elTotalScenes = document.getElementById('totalScenes');
+                this.elTotalTime = document.getElementById('totalTime');
+                this.elSaveStatus = document.getElementById('saveStatus');
+
+                this.init();
+            }
+
+            // --- NOUVELLE FONCTION UI/UX ACCORDÉON ---
+            toggleAccordion(id) {
+                const content = document.getElementById(id);
+                const arrow = document.getElementById(`arrow-${id}`);
+                
+                if (content) {
+                    const isOpening = !content.classList.contains('open');
+                    
+                    if (isOpening) {
+                        content.classList.add('open');
+                        if (arrow) arrow.innerText = '▲';
+                        this.accordionState[id] = true;
+                    } else {
+                        content.classList.remove('open');
+                        if (arrow) arrow.innerText = '▼';
+                        this.accordionState[id] = false;
+                    }
+                    this.saveToStorage();
+                }
+            }
+
+            // --- PERSISTENCE & INIT ---
+
+            init() {
+                this.loadFromStorage();
+                // Pas besoin de initListeners pour les inputs globaux si on utilise oninput dans le HTML
+                
+                // Charger l'état de l'accordéon au démarrage
+                for (const id in this.accordionState) {
+                    const content = document.getElementById(id);
+                    const arrow = document.getElementById(`arrow-${id}`);
+                    if (content && this.accordionState[id]) {
+                        content.classList.add('open');
+                        if (arrow) arrow.innerText = '▲';
+                    }
+                }
+                
+                if (this.scenes.length === 0) {
+                    this.addScene("Young star looking intensely into the camera.", this.lastUsedCamera, '#30363d', this.lastUsedStatus, '', 12, 'center', 1.0, false, false, false);
+                } else {
+                    this.refreshUI(false);
+                }
+            }
+
+            saveToStorage() {
+                // BUG FIX V6.0: Assurer que toutes les valeurs sont à jour avant la sauvegarde
+                const data = {
+                    master: this.masterPromptInput.value,
+                    tech: this.techStyleInput.value,
+                    consistency: this.consistencyInput.value,
+                    negative: this.negativePromptInput.value,
+                    aspectRatio: this.aspectRatioInput.value,
+                    scenes: this.scenes,
+                    accordionState: this.accordionState 
+                };
+                localStorage.setItem('cinegrok_data', JSON.stringify(data));
+                
+                // UX V6.0: Confirmation de sauvegarde
+                this.elSaveStatus.style.opacity = '1';
+                setTimeout(() => this.elSaveStatus.style.opacity = '0.5', 1000);
+            }
+
+            loadFromStorage() {
+                const data = localStorage.getItem('cinegrok_data');
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        this.masterPromptInput.value = parsed.master || this.masterPromptInput.defaultValue || '';
+                        this.techStyleInput.value = parsed.tech || this.techStyleInput.defaultValue || '';
+                        this.consistencyInput.value = parsed.consistency || this.consistencyInput.defaultValue || '';
+                        this.negativePromptInput.value = parsed.negative || this.negativePromptInput.defaultValue || '';
+                        this.aspectRatioInput.value = parsed.aspectRatio || '16:9';
+                        this.accordionState = parsed.accordionState || {};
+
+                        this.scenes = (parsed.scenes || []).map(scene => ({
+                            id: scene.id,
+                            action: scene.action || "",
+                            camera: scene.camera || "Slow zoom in",
+                            moodColor: scene.moodColor || '#30363d',
+                            status: scene.status || 'Scripté',
+                            notes: scene.notes || "",
+                            time: scene.time || 12,
+                            comp: scene.comp || 'center',
+                            weight: scene.weight || 1.0,
+                            broll: scene.broll || false,
+                            detailsOpen: scene.detailsOpen || false
+                        }));
+
+                        if (this.scenes.length > 0) {
+                            const last = this.scenes[this.scenes.length - 1];
+                            this.lastUsedStatus = last.status;
+                            this.lastUsedCamera = last.camera;
+                        }
+
+                    } catch (e) {
+                        console.error("Erreur lors du chargement des données depuis le localStorage:", e);
+                        this.scenes = []; // Réinitialiser en cas d'erreur
+                    }
+                }
+            }
+            
+            // --- LOGIQUE CORE ---
+
+            addScene(action = "", camera = this.lastUsedCamera, moodColor = '#30363d', status = this.lastUsedStatus, notes = '', time = 12, comp = 'center', weight = 1.0, broll = false, detailsOpen = false, doSave = true) {
+                const id = Date.now();
+                const scene = { id, action, camera, moodColor, status, notes, time, comp, weight, broll, detailsOpen }; 
+                this.scenes.push(scene);
+                
+                this.lastUsedStatus = status;
+                this.lastUsedCamera = camera;
+
+                this.refreshUI(false); 
+                if (doSave) this.saveToStorage();
+                
+                if (doSave) document.getElementById(`card-${id}`).scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+            
+            duplicateScene(id) { 
+                const originalScene = this.scenes.find(s => s.id === id);
+                if (originalScene) {
+                    const newScene = { ...originalScene }; 
+                    newScene.id = Date.now() + 1; 
+                    newScene.status = 'Scripté'; 
+                    newScene.notes = ''; 
+                    newScene.detailsOpen = false; // Ne pas ouvrir les détails de la copie
+                    
+                    const originalIndex = this.scenes.findIndex(s => s.id === id);
+                    this.scenes.splice(originalIndex + 1, 0, newScene);
+                    
+                    this.refreshUI(false);
+                    this.saveToStorage();
+                }
+            }
+
+            deleteScene(id) {
+                if (confirm("Êtes-vous sûr de vouloir supprimer cette scène ?")) {
+                    this.scenes = this.scenes.filter(s => s.id !== id);
+                    this.refreshUI(false);
+                    this.saveToStorage();
+                }
+            }
+
+            updateScene(id, field, value) {
+                const scene = this.scenes.find(s => s.id === id);
+                if (scene) {
+                    if (field === 'broll' || field === 'detailsOpen') {
+                         scene[field] = value;
+                    } else if (field === 'weight') {
+                        // BUG FIX V6.0: Assurer la conversion en float, même si vide (retourne 1.0 par défaut)
+                         scene[field] = value === '' ? 1.0 : parseFloat(value);
+                    } else {
+                        scene[field] = value;
+                    }
+
+                    if (field === 'status') this.lastUsedStatus = value;
+                    if (field === 'camera') this.lastUsedCamera = value;
+                    
+                    // BUG FIX V6.0: Re-rendu de la carte spécifique pour éviter de rafraîchir toute la liste
+                    this.renderCard(scene, this.scenes.findIndex(s => s.id === id) + 1);
+                    this.saveToStorage();
+                }
+            }
+
+            toggleDetails(id) {
+                const scene = this.scenes.find(s => s.id === id);
+                if (scene) {
+                    scene.detailsOpen = !scene.detailsOpen;
+                    // BUG FIX V6.0: Utiliser updateScene pour déclencher la sauvegarde
+                    this.updateScene(id, 'detailsOpen', scene.detailsOpen);
+                }
+            }
+            
+            // --- GENERATEUR DE PROMPT & RENDU ---
+            
+            countWords(text) { return text.trim().split(/\s+/).filter(word => word.length > 0).length; }
+            getTimeTags(timeValue) { 
+                const time = parseInt(timeValue);
+                const map = this.timeMap.find(t => time >= t.range[0] && time <= t.range[1]);
+                if (map) return { icon: map.icon, tag: map.tag };
+                return { icon: '❓', tag: '' };
+            }
+
+            generateFullPrompt(sceneObj, withSuffixes = true) {
+                const master = this.masterPromptInput.value.trim();
+                const style = this.techStyleInput.value.trim();
+                const consistency = this.consistencyInput.value.trim();
+                const negative = this.negativePromptInput.value.trim();
+                const aspectRatio = this.aspectRatioInput.value.trim();
+                
+                const timeTags = this.getTimeTags(sceneObj.time).tag;
+                const compTags = this.compMap[sceneObj.comp] || '';
+                
+                let masterPart = '';
+                if (!sceneObj.broll) { 
+                    masterPart = `${master}, ${consistency}`;
+                }
+
+                let actionPart = sceneObj.action;
+                // BUG FIX V6.0: Assurer que le poids est appliqué au formatage
+                const finalWeight = sceneObj.weight === 1.0 || sceneObj.weight === 0.0 ? '' : `::${sceneObj.weight.toFixed(1)}`;
+                if (finalWeight) {
+                    actionPart = `( ${actionPart} )${finalWeight}`;
+                }
+
+                let positiveParts = [
+                    masterPart,
+                    actionPart,
+                    timeTags, 
+                    compTags, 
+                    `Camera: ${sceneObj.camera}`,
+                    style
+                ];
+                
+                let finalPrompt = positiveParts.filter(p => p.length > 0).join(", ").replace(/, ,/g, ',');
+
+                if (withSuffixes) {
+                    if (aspectRatio.length > 0) {
+                        finalPrompt += ` --ar ${aspectRatio}`;
+                    }
+                    if (negative.length > 0) {
+                        finalPrompt += ` --neg ${negative}`;
+                    }
+                }
+                
+                return finalPrompt.trim();
+            }
+
+            // BUG FIX V6.0: Fonction de rendu pour une seule carte (performance)
+            renderCard(scene, index) {
+                const existingCard = document.getElementById(`card-${scene.id}`);
+                if (existingCard) {
+                    const newCard = this.createSceneElement(scene, index);
+                    // Remplacer l'ancien élément par le nouveau pour mettre à jour l'état
+                    existingCard.parentNode.replaceChild(newCard, existingCard);
+                }
+            }
+
+            refreshUI(resetScroll = false) {
+                this.sceneListContainer.innerHTML = '';
+                
+                let filteredScenes = this.scenes;
+                if (this.currentFilter !== 'all') {
+                    filteredScenes = this.scenes.filter(s => s.status === this.currentFilter);
+                }
+
+                if (filteredScenes.length === 0 && this.scenes.length > 0) {
+                     this.sceneListContainer.innerHTML = `<p style="text-align:center; color:var(--text-dim); margin-top:50px;">Aucune scène avec le statut '${this.currentFilter}'.</p>`;
+                }
+
+                filteredScenes.forEach((scene) => {
+                    const globalIndex = this.scenes.findIndex(s => s.id === scene.id) + 1;
+                    const el = this.createSceneElement(scene, globalIndex);
+                    this.sceneListContainer.appendChild(el);
+                });
+
+                this.updateStats();
+
+                if (resetScroll) {
+                    document.getElementById('timelineScroll').scrollTop = 0;
+                }
+            }
+
+            getCompositionGrid(id, currentComp) {
+                // Rendu HTML pour la grille de composition (logique inchangée)
+                const grid = document.createElement('div');
+                grid.className = 'composition-grid';
+                
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'comp-cell';
+                    const row = Math.floor(i / 3);
+                    const col = i % 3;
+                    
+                    const isCenter = (row === 1 && col === 1);
+                    const isLeft = (col === 0);
+                    const isRight = (col === 2);
+                    
+                    if (currentComp === 'center' && isCenter) {
+                         cell.classList.add('active');
+                    } else if (currentComp === 'left' && isLeft) {
+                         cell.classList.add('active');
+                    } else if (currentComp === 'right' && isRight) {
+                         cell.classList.add('active');
+                    }
+
+                    cell.addEventListener('click', () => {
+                        let newComp = currentComp;
+                        if (isCenter) {
+                            newComp = 'center';
+                        } else if (isLeft) {
+                            newComp = 'left';
+                        } else if (isRight) {
+                            newComp = 'right';
+                        } else {
+                            return;
+                        }
+                        this.updateScene(id, 'comp', newComp);
+                    });
+                    grid.appendChild(cell);
+                }
+                return grid.outerHTML;
+            }
+            
+            createCameraOptions(currentCam, isBroll) {
+                let options = '';
+                const available = isBroll ? 
+                    this.availableCams.filter(c => c !== 'Statique') : 
+                    this.availableCams;
+                
+                available.forEach(cam => {
+                    options += `<option value="${cam}" ${currentCam === cam ? 'selected' : ''}>${cam}</option>`;
+                });
+
+                if (isBroll && currentCam === 'Statique') {
+                    // Si on passe en B-Roll, mais que la caméra était Statique, on sélectionne le premier mouvement
+                    options = `<option value="${available[0]}" selected>${available[0]}</option>` + options.substring(options.indexOf('<option') + available[0].length + 10);
+                }
+                
+                return options;
+            }
+
+            createSceneElement(scene, index) {
+                const statusData = this.statusMap[scene.status] || this.statusMap['Scripté'];
+                const timeData = this.getTimeTags(scene.time);
+                
+                const div = document.createElement('div');
+                div.className = 'scene-card';
+                div.id = `card-${scene.id}`;
+                div.draggable = true; 
+                div.style.borderLeft = `4px solid ${scene.moodColor || 'var(--border)'}`; 
+
+                this.addDnDEvents(div, scene.id);
+
+                const fullPrompt = this.generateFullPrompt(scene);
+                
+                div.innerHTML = `
+                    <div class="card-header">
+                        <div class="scene-info">
+                            <span class="scene-number">${index.toString().padStart(2, '0')}</span>
+                        </div>
+                        <div class="scene-controls">
+                            <button class="btn-icon" onclick="app.duplicateScene(${scene.id})" title="Dupliquer">➕</button>
+                            <button class="btn-icon" onclick="app.copyPrompt(${scene.id})" title="Copier le prompt">📋</button>
+                            <button class="btn-icon btn-delete" onclick="app.deleteScene(${scene.id})" title="Supprimer">🗑️</button>
+                            <button class="toggle-btn" id="toggle-${scene.id}" onclick="app.toggleDetails(${scene.id})" title="Ouvrir les détails avancés">
+                                <span id="icon-${scene.id}">${scene.detailsOpen ? '▲' : '⚙️'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="primary-input-row">
+                        <input type="text" value="${scene.action}" 
+                            oninput="app.updateScene(${scene.id}, 'action', this.value)" 
+                            placeholder="Action / Scénario">
+                        
+                        <select onchange="app.updateScene(${scene.id}, 'camera', this.value)" title="${scene.broll ? 'Statique désactivé en B-Roll' : ''}">
+                            ${this.createCameraOptions(scene.camera, scene.broll)}
+                        </select>
+
+                        <select onchange="app.updateScene(${scene.id}, 'status', this.value)" style="border-left: 5px solid ${statusData.color};">
+                            <option value="Scripté" ${scene.status === 'Scripté' ? 'selected' : ''}>Scripté ${statusData.label}</option>
+                            <option value="Prompt OK" ${scene.status === 'Prompt OK' ? 'selected' : ''}>Prompt OK ${statusData.label}</option>
+                            <option value="Généré" ${scene.status === 'Généré' ? 'selected' : ''}>Généré ${statusData.label}</option>
+                            <option value="Monté" ${scene.status === 'Monté' ? 'selected' : ''}>Monté ${statusData.label}</option>
+                        </select>
+                    </div>
+
+                    <div id="details-${scene.id}" class="advanced-details ${scene.detailsOpen ? 'open' : ''}">
+                        <div class="advanced-row">
+                            <div class="prompt-weight-group">
+                                <label style="margin:0;">Poids (::)</label>
+                                <input type="number" step="0.1" min="0.1" max="5.0" value="${scene.weight}" 
+                                    oninput="app.updateScene(${scene.id}, 'weight', this.value)">
+                            </div>
+                            <div class="mood-color-group">
+                                <label>Mood</label>
+                                <input type="color" value="${scene.moodColor || '#30363d'}" 
+                                    onchange="app.updateScene(${scene.id}, 'moodColor', this.value)">
+                            </div>
+                            <div class="comp-control">
+                                <label>Comp.</label>
+                                ${this.getCompositionGrid(scene.id, scene.comp)}
+                            </div>
+                            <div class="broll-toggle" style="align-self: center;">
+                                <input type="checkbox" id="broll-${scene.id}" ${scene.broll ? 'checked' : ''} 
+                                    onchange="app.updateScene(${scene.id}, 'broll', this.checked)">
+                                <label for="broll-${scene.id}" title="Désactive le Master Prompt et la Cohérence pour les plans secondaires.">B-Roll (Sans Master)</label>
+                            </div>
+                        </div>
+
+                        <div class="advanced-row" style="grid-template-columns: 2fr 1fr;">
+                            <div class="time-slider-group">
+                                <label style="width: auto;">Éclairage (${timeData.icon})</label>
+                                <input type="range" min="1" max="24" value="${scene.time}" 
+                                    oninput="app.updateScene(${scene.id}, 'time', this.value)" title="${timeData.tag}">
+                            </div>
+                            <input type="text" value="${scene.notes || ''}" 
+                                oninput="app.updateScene(${scene.id}, 'notes', this.value)" 
+                                placeholder="Notes du réalisateur (V/H/S, VFX...)">
+                        </div>
+                    </div>
+
+                    <div class="final-prompt-preview" id="preview-${scene.id}" onclick="app.copyPrompt(${scene.id})" title="Cliquez pour copier">
+                        <span class="word-count">${this.countWords(fullPrompt)} Mots</span>
+                        ${fullPrompt}
+                    </div>
+                `;
+                return div;
+            }
+
+            // --- DRAG & DROP (Stabilisé) ---
+            addDnDEvents(el, id) {
+                el.addEventListener('dragstart', (e) => {
+                    this.dragSrcEl = el;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', id);
+                    el.classList.add('dragging');
+                });
+                el.addEventListener('dragend', (e) => { el.classList.remove('dragging'); });
+                el.addEventListener('dragover', (e) => { if (e.preventDefault) e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; });
+                el.addEventListener('dragenter', (e) => { el.style.border = '1px solid var(--accent)'; });
+                el.addEventListener('dragleave', (e) => { el.style.border = ''; });
+
+                el.addEventListener('drop', (e) => {
+                    e.stopPropagation();
+                    el.style.border = '';
+                    const draggedId = parseInt(this.dragSrcEl.id.replace('card-', ''));
+                    const targetId = id;
+                    if (draggedId !== targetId) {
+                        this.reorderScenes(draggedId, targetId);
+                    }
+                    return false;
+                });
+            }
+
+            reorderScenes(draggedId, targetId) {
+                const draggedIndex = this.scenes.findIndex(s => s.id === draggedId);
+                const targetIndex = this.scenes.findIndex(s => s.id === targetId);
+                
+                // BUG FIX V6.0: Vérification des index valides
+                if (draggedIndex !== -1 && targetIndex !== -1) {
+                    const [movedItem] = this.scenes.splice(draggedIndex, 1);
+                    this.scenes.splice(targetIndex, 0, movedItem);
+                    this.refreshUI(false);
+                    this.saveToStorage();
+                }
+            }
+
+            // --- OUTILS INCHANGÉS ---
+            // ... (randomCam, filterScenes, copyPrompt, import/export, etc. inchangés)
+            updateStats() {
+                this.elTotalScenes.innerText = this.scenes.length;
+                const totalSeconds = this.scenes.length * 6; 
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                this.elTotalTime.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            // Copie
+            copyPrompt(id) {
+                const scene = this.scenes.find(s => s.id === id);
+                if (scene) {
+                    const text = this.generateFullPrompt(scene);
+                    navigator.clipboard.writeText(text).then(() => {
+                        const t = document.getElementById('toast');
+                        t.innerText = "Prompt Copié !";
+                        t.style.backgroundColor = 'var(--accent)';
+                        t.style.color = 'var(--bg-dark)';
+                        t.classList.add('show');
+                        setTimeout(()=>t.classList.remove('show'), 2000);
+                    });
+                }
+            }
+            openBatchModal() {
+                const outputDiv = document.getElementById('batchPromptOutput');
+                let batchOutput = '';
+                
+                this.scenes.forEach((scene, index) => {
+                    const promptText = this.generateFullPrompt(scene);
+                    const sceneNumber = index + 1;
+                    batchOutput += `[SCENE ${sceneNumber.toString().padStart(2, '0')}] ${promptText}\n\n`;
+                });
+
+                outputDiv.innerText = batchOutput || "Aucune scène à exporter.";
+                document.getElementById('batchModal').style.display = 'flex';
+            }
+            copyBatchPrompts() {
+                const text = document.getElementById('batchPromptOutput').innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    const t = document.getElementById('toast');
+                    t.innerText = "Séquence Complète Copiée !";
+                    t.style.backgroundColor = 'var(--status-edited)';
+                    t.style.color = 'white';
+                    t.classList.add('show');
+                    setTimeout(()=>t.classList.remove('show'), 2000);
+                });
+            }
+            // Import/Export
+            importTrigger() { document.getElementById('fileInput').click(); }
+            exportAll() {
+                const data = {
+                    master: this.masterPromptInput.value, tech: this.techStyleInput.value, consistency: this.consistencyInput.value, 
+                    negative: this.negativePromptInput.value, aspectRatio: this.aspectRatioInput.value, scenes: this.scenes, accordionState: this.accordionState
+                };
+                const jsonStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([jsonStr], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'cinegrok_project_' + Date.now() + '.json';
+                a.click();
+            }
+            importAll(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        this.masterPromptInput.value = data.master || "";
+                        this.techStyleInput.value = data.tech || "";
+                        this.consistencyInput.value = data.consistency || "";
+                        this.negativePromptInput.value = data.negative || "";
+                        this.aspectRatioInput.value = data.aspectRatio || "16:9";
+                        this.accordionState = data.accordionState || {};
+                        this.scenes = data.scenes || [];
+                        this.refreshUI(true);
+                        this.saveToStorage();
+                        const t = document.getElementById('toast');
+                        t.innerText = "Projet JSON Importé !";
+                        t.style.backgroundColor = 'gold'; t.style.color = 'black'; t.classList.add('show');
+                        setTimeout(()=>t.classList.remove('show'), 2000);
+                    } catch (error) {
+                        alert("Erreur lors de l'importation du fichier JSON. Format incorrect.");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new ClipBuilder();
+        });
+    </script>
+</body>
+</html>
